@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#05080b" />
+<title>DEAD ASCENT — Survive the Night</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23070b0f'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='%23ff4438'/%3E%3Cpath d='M16 10v8M16 22v1' stroke='%23070b0f' stroke-width='3'/%3E%3C/svg%3E" />
+<style>
+  @font-face {
+    font-family: 'Rajdhani';
+    src: url('./assets/fonts/rajdhani-500.woff2') format('woff2');
+    font-weight: 500; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Rajdhani';
+    src: url('./assets/fonts/rajdhani-600.woff2') format('woff2');
+    font-weight: 600; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Rajdhani';
+    src: url('./assets/fonts/rajdhani-700.woff2') format('woff2');
+    font-weight: 700; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Teko';
+    src: url('./assets/fonts/teko.woff2') format('woff2');
+    font-weight: 400 700; font-style: normal; font-display: swap;
+  }
+
+  :root {
+    --ink: #ece9df;
+    --dim: #9aa4a8;
+    --red: #ff4438;
+    --amber: #ffb54a;
+    --teal: #58e6cf;
+    --green: #7dff4d;
+    --panel: rgba(7, 11, 14, 0.56);
+    --line: rgba(235, 240, 240, 0.13);
+    --pad: max(18px, env(safe-area-inset-left));
+    --pad-r: max(18px, env(safe-area-inset-right));
+    --pad-t: max(14px, env(safe-area-inset-top));
+    --pad-b: max(14px, env(safe-area-inset-bottom));
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: #04070a; color: var(--ink);
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  canvas { display: block; }
+  #app { position: fixed; inset: 0; }
+  #game { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; }
+
+  /* ------------------------------------------------------------- chrome */
+  .vignette, .grain, .scanlines, .damage-overlay, .toxic-overlay, .lowhp-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 20;
+  }
+  .vignette {
+    background: radial-gradient(ellipse at 50% 48%, transparent 38%, rgba(0,0,0,0.28) 70%, rgba(0,0,0,0.72) 100%);
+    mix-blend-mode: multiply;
+  }
+  .grain { opacity: 0.055; mix-blend-mode: overlay; background-repeat: repeat; }
+  .scanlines {
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px);
+    opacity: 0.5;
+  }
+  .damage-overlay {
+    background: radial-gradient(ellipse at center, transparent 42%, rgba(190, 10, 10, 0.55) 100%);
+    opacity: 0; transition: opacity 0.45s ease-out;
+  }
+  .toxic-overlay {
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(70, 200, 30, 0.38) 100%);
+    opacity: 0; transition: opacity 0.4s ease-out;
+  }
+  .lowhp-overlay {
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(120, 0, 0, 0.5) 100%);
+    opacity: 0;
+  }
+  .lowhp-overlay.on { animation: lowhp 1.15s ease-in-out infinite; }
+  @keyframes lowhp { 0%,100% { opacity: 0.15; } 50% { opacity: 0.6; } }
+
+  /* --------------------------------------------------------------- boot */
+  #boot {
+    position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; background: #04070a;
+    transition: opacity 0.8s ease; gap: 18px;
+  }
+  #boot.hide { opacity: 0; pointer-events: none; }
+  #boot .mark { font-family: 'Teko'; font-size: clamp(54px, 10vw, 96px); letter-spacing: 0.14em; color: #e8e4d7; }
+  #boot .mark span { color: var(--red); }
+  #boot .bar { width: min(320px, 60vw); height: 2px; background: rgba(255,255,255,0.1); overflow: hidden; }
+  #boot .bar i { display: block; height: 100%; width: 40%; background: var(--red); animation: bootbar 1.1s ease-in-out infinite; }
+  @keyframes bootbar { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+  #boot .sub { font-size: 12px; letter-spacing: 0.4em; color: #6f7a7d; }
+
+  /* --------------------------------------------------------------- menu */
+  #menu {
+    position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(4,8,11,0.05) 0%, rgba(4,8,11,0.55) 52%, rgba(2,4,6,0.93) 100%),
+      linear-gradient(180deg, rgba(2,4,6,0.75) 0%, rgba(2,4,6,0.15) 30%, rgba(2,4,6,0.2) 65%, rgba(2,4,6,0.9) 100%);
+    transition: opacity 0.5s ease, visibility 0.5s;
+    padding: var(--pad-t) var(--pad-r) var(--pad-b) var(--pad);
+  }
+  #menu.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .menu-top {
+    position: absolute; top: var(--pad-t); left: var(--pad-r); right: var(--pad-r);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; letter-spacing: 0.34em; color: #8b969a;
+  }
+  .menu-top .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #c9cfcd; }
+  .menu-top .brand i { width: 22px; height: 2px; background: var(--red); display: inline-block; }
+  .menu-top .right { display: flex; gap: 18px; align-items: center; }
+  .icon-btn {
+    background: transparent; border: 1px solid var(--line); color: #c9cfcd;
+    width: 34px; height: 34px; border-radius: 3px; cursor: pointer;
+    display: grid; place-items: center; font-family: inherit; font-size: 14px;
+    transition: all .2s;
+  }
+  .icon-btn:hover { border-color: var(--red); color: #fff; }
+
+  .menu-core { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }
+  .kicker {
+    display: flex; align-items: center; gap: 12px; color: var(--red);
+    font-size: clamp(10px, 1.3vw, 13px); font-weight: 700; letter-spacing: 0.52em;
+    text-transform: uppercase; margin-bottom: 2px;
+  }
+  .kicker::before, .kicker::after { content: ''; width: 34px; height: 1px; background: rgba(255,68,56,0.5); }
+  .title {
+    font-family: 'Teko'; font-weight: 700; line-height: 0.82;
+    font-size: clamp(76px, 14.5vw, 196px); letter-spacing: 0.015em;
+    margin: 0; color: #f2efe5;
+    text-shadow: 0 0 60px rgba(255,70,40,0.14), 0 8px 40px rgba(0,0,0,0.8);
+  }
+  .title .accent { color: var(--red); }
+  .subtitle {
+    font-size: clamp(11px, 1.4vw, 15px); letter-spacing: 0.62em; color: #a8b0b2;
+    margin: 6px 0 0; font-weight: 600; text-transform: uppercase;
+  }
+  .menu-tag { margin: 18px 0 26px; color: #778286; font-size: 13px; letter-spacing: 0.16em; max-width: 560px; }
+  .menu-tag b { color: #cfd5d3; font-weight: 600; }
+
+  .deploy {
+    position: relative; border: 1px solid rgba(255, 80, 60, 0.55);
+    background: linear-gradient(180deg, rgba(255, 68, 56, 0.18), rgba(255, 68, 56, 0.05));
+    color: #fff; font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.32em;
+    font-size: clamp(15px, 1.5vw, 18px); padding: 17px 58px; cursor: pointer;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    transition: all .18s ease; text-transform: uppercase;
+    box-shadow: 0 0 42px rgba(255, 60, 40, 0.18), inset 0 0 24px rgba(255,60,40,0.08);
+  }
+  .deploy:hover { background: linear-gradient(180deg, rgba(255,68,56,0.34), rgba(255,68,56,0.12)); transform: translateY(-1px); box-shadow: 0 0 60px rgba(255, 60, 40, 0.3); }
+  .deploy:active { transform: translateY(1px); }
+  .deploy .key { display: block; font-size: 9px; letter-spacing: 0.3em; color: rgba(255,255,255,0.55); margin-top: 4px; font-weight: 500; }
+
+  .menu-links { display: flex; gap: 10px; margin-top: 14px; }
+  .ghost-btn {
+    background: rgba(255,255,255,0.02); border: 1px solid var(--line); color: #b6bdbd;
+    font-family: 'Rajdhani'; font-weight: 600; letter-spacing: 0.22em; font-size: 11px;
+    padding: 10px 18px; cursor: pointer; text-transform: uppercase; transition: all .2s;
+  }
+  .ghost-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); }
+
+  .menu-bottom {
+    position: absolute; bottom: var(--pad-b); left: var(--pad-r); right: var(--pad-r);
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;
+    font-size: 10px; letter-spacing: 0.2em; color: #6d777a; text-transform: uppercase;
+  }
+  .menu-bottom .stat { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+  .menu-bottom .stat b { color: #d9ddda; font-size: 14px; letter-spacing: 0.12em; font-family: 'Teko'; font-weight: 500; }
+  .menu-bottom .hint { display: flex; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
+  .menu-bottom .hint span b { color: #c9cfcd; font-weight: 600; }
+
+  .menu-threats {
+    margin-top: 20px; display: flex; gap: 26px; flex-wrap: wrap; justify-content: center;
+    font-size: 10px; letter-spacing: 0.22em; color: #8a9497; text-transform: uppercase;
+  }
+  .menu-threats div { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; box-shadow: 0 0 12px currentColor; background: currentColor; }
+  .dot.red { color: var(--red); } .dot.green { color: var(--green); } .dot.mag { color: #ff4bd8; } .dot.amber { color: var(--amber); }
+
+  /* --------------------------------------------------------------- HUD */
+  #hud { position: fixed; inset: 0; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.5s ease; }
+  #hud.on { opacity: 1; }
+  .hud-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 6px 30px rgba(0,0,0,0.35);
+  }
+  .corner { clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
+
+  .hud-top-left { position: absolute; top: var(--pad-t); left: var(--pad-r); display: flex; flex-direction: column; gap: 8px; }
+  .wave-card { padding: 10px 16px 11px; min-width: 184px; }
+  .wave-card .label { font-size: 9px; letter-spacing: 0.34em; color: #8f9a9d; display: flex; justify-content: space-between; }
+  .wave-card .label em { font-style: normal; color: var(--red); font-weight: 700; }
+  .wave-card .wave-num { font-family: 'Teko'; font-size: 40px; line-height: 0.9; letter-spacing: 0.04em; color: #f2efe6; margin-top: 2px; }
+  .wave-card .wave-num small { font-family: 'Rajdhani'; font-size: 10px; letter-spacing: 0.24em; color: #96a0a2; margin-left: 8px; }
+  .wave-card .enemies { display: flex; align-items: center; gap: 7px; margin-top: 5px; font-size: 10px; letter-spacing: 0.2em; color: #aab2b3; text-transform: uppercase; }
+  .wave-card .enemies .count { font-family: 'Teko'; font-size: 19px; color: var(--red); line-height: 1; }
+  .wave-card .enemies .bar { flex: 1; height: 3px; background: rgba(255,255,255,0.09); overflow: hidden; }
+  .wave-card .enemies .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, #ff4438, #ff8a3d); transition: width .35s ease; }
+
+  .hud-top-right { position: absolute; top: var(--pad-t); right: var(--pad-r); text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .score-card { padding: 8px 14px 9px; min-width: 150px; }
+  .score-card .label { font-size: 9px; letter-spacing: 0.3em; color: #8f9a9d; }
+  .score-card .score { font-family: 'Teko'; font-size: 32px; line-height: 1; color: #f2efe6; }
+  .score-card .meta { font-size: 9px; letter-spacing: 0.2em; color: #93a0a2; display: flex; gap: 12px; justify-content: flex-end; margin-top: 2px; }
+  .score-card .meta b { color: #d7dcda; font-weight: 600; }
+  .killfeed { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 320px; }
+  .killfeed .kf {
+    font-size: 10px; letter-spacing: 0.14em; color: #d6dbd8; background: rgba(4,7,9,0.62);
+    border-right: 2px solid var(--red); padding: 4px 9px; animation: kfin 0.18s ease-out;
+    text-transform: uppercase;
+  }
+  .killfeed .kf.head { border-right-color: var(--amber); }
+  .killfeed .kf b { color: var(--amber); font-weight: 700; }
+  .killfeed .kf .pts { color: #9aa4a6; margin-left: 7px; }
+  @keyframes kfin { from { transform: translateX(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .compass-wrap {
+    position: absolute; top: var(--pad-t); left: 50%; transform: translateX(-50%);
+    width: min(440px, 42vw); height: 50px; opacity: 0.94;
+  }
+  #compass { width: 100%; height: 100%; display: block; }
+  .boss-wrap {
+    position: absolute; top: calc(var(--pad-t) + 58px); left: 50%; transform: translateX(-50%);
+    width: min(520px, 56vw); display: none; text-align: center;
+  }
+  .boss-wrap.on { display: block; animation: bossin 0.4s ease-out; }
+  @keyframes bossin { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  .boss-name { font-size: 10px; letter-spacing: 0.42em; color: #ff7b5f; margin-bottom: 5px; text-transform: uppercase; text-shadow: 0 0 12px rgba(255,60,30,0.6); }
+  .boss-name b { color: #fff; }
+  .boss-bar { height: 7px; background: rgba(10,6,6,0.7); border: 1px solid rgba(255,70,50,0.35); padding: 1px; }
+  .boss-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #7c0f0a, #ff3b24 60%, #ff9a3d); transition: width 0.18s linear; box-shadow: 0 0 14px rgba(255,60,30,0.7); }
+
+  .hud-bottom-left { position: absolute; bottom: var(--pad-b); left: var(--pad-r); display: flex; flex-direction: column; gap: 8px; }
+  .vitals { padding: 10px 15px 11px; width: 252px; }
+  .vitals .row { display: flex; align-items: flex-end; justify-content: space-between; }
+  .vitals .hp { font-family: 'Teko'; font-size: 42px; line-height: 0.85; color: #f2efe6; display: flex; align-items: baseline; gap: 4px; }
+  .vitals .hp small { font-family: 'Rajdhani'; font-size: 10px; letter-spacing: 0.2em; color: #8f9a9d; }
+  .vitals .state { font-size: 9px; letter-spacing: 0.26em; color: var(--teal); text-transform: uppercase; }
+  .vitals .state.hurt { color: var(--red); }
+  .vitals .hp-bar { height: 6px; background: rgba(255,255,255,0.08); margin-top: 7px; position: relative; overflow: hidden; }
+  .vitals .hp-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff3b2f, #ff8a3d); transition: width .2s ease; box-shadow: 0 0 14px rgba(255,60,40,0.5); }
+  .vitals .hp-bar::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 24%, rgba(0,0,0,0.35) 24% 25%); }
+  .vitals .stam { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
+  .vitals .stam span { font-size: 8px; letter-spacing: 0.26em; color: #7f8a8d; }
+  .vitals .stam .bar { flex: 1; height: 3px; background: rgba(255,255,255,0.08); }
+  .vitals .stam .bar i { display: block; height: 100%; width: 100%; background: var(--teal); transition: width .12s linear; }
+
+  .hud-bottom-right { position: absolute; bottom: var(--pad-b); right: var(--pad-r); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .ammo-card { padding: 9px 16px 11px; text-align: right; min-width: 224px; }
+  .ammo-card .wname { font-size: 9px; letter-spacing: 0.28em; color: #93a0a2; text-transform: uppercase; }
+  .ammo-card .wname b { color: var(--amber); font-weight: 600; }
+  .ammo-card .ammo { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; font-family: 'Teko'; line-height: 0.9; }
+  .ammo-card .ammo .mag { font-size: 54px; color: #f2efe6; }
+  .ammo-card .ammo .mag.low { color: var(--red); }
+  .ammo-card .ammo .slash { color: #5f696b; font-size: 26px; }
+  .ammo-card .ammo .res { font-size: 26px; color: #9aa4a6; }
+  .ammo-card .slots { display: flex; justify-content: flex-end; gap: 5px; margin-top: 4px; }
+  .ammo-card .slot { font-size: 8px; letter-spacing: 0.14em; color: #7c878a; border: 1px solid rgba(255,255,255,0.1); padding: 2px 6px; }
+  .ammo-card .slot.active { color: #10130f; background: var(--amber); border-color: var(--amber); font-weight: 700; }
+  .ammo-card .grens { display: flex; justify-content: flex-end; align-items: center; gap: 5px; margin-top: 5px; font-size: 9px; letter-spacing: 0.2em; color: #8f9a9d; }
+  .ammo-card .grens b { color: #d6dbd8; font-family: 'Teko'; font-size: 18px; line-height: 1; }
+  .ammo-card .grens .pip { width: 4px; height: 12px; background: var(--green); box-shadow: 0 0 8px rgba(125,255,77,0.5); }
+
+  .crosshair {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 31;
+    --gap: 7px; --len: 9px; --op: 0.9;
+    transition: opacity 0.18s;
+  }
+  .crosshair.ads { opacity: 0.25; }
+  .crosshair .ch { position: absolute; background: rgba(245,245,238,0.92); box-shadow: 0 0 4px rgba(0,0,0,0.9); }
+  .crosshair .ch.t { width: 2px; height: var(--len); left: -1px; top: calc(-1 * var(--gap) - var(--len)); }
+  .crosshair .ch.b { width: 2px; height: var(--len); left: -1px; top: var(--gap); }
+  .crosshair .ch.l { height: 2px; width: var(--len); top: -1px; left: calc(-1 * var(--gap) - var(--len)); }
+  .crosshair .ch.r { height: 2px; width: var(--len); top: -1px; left: var(--gap); }
+  .crosshair .dot { position: absolute; width: 2px; height: 2px; left: -1px; top: -1px; background: var(--red); border-radius: 50%; box-shadow: 0 0 6px rgba(255,60,40,0.9); }
+  .crosshair.pulse .ch { background: var(--amber); }
+
+  .hitmarker {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; z-index: 32;
+  }
+  .hitmarker.show { animation: hm 0.18s ease-out; }
+  .hitmarker.kill .hm { background: var(--red); box-shadow: 0 0 8px rgba(255,50,30,0.9); }
+  @keyframes hm { 0% { opacity: 1; transform: scale(1.25); } 100% { opacity: 0; transform: scale(0.9); } }
+  .hm { position: absolute; width: 2px; height: 8px; background: #f4f2e9; box-shadow: 0 0 4px #000; }
+  .hm.a { transform: rotate(45deg) translate(-11px, -11px); }
+  .hm.b { transform: rotate(-45deg) translate(11px, -11px); }
+  .hm.c { transform: rotate(-45deg) translate(-11px, 11px); }
+  .hm.d { transform: rotate(45deg) translate(11px, 11px); }
+
+  .damage-arc {
+    position: absolute; left: 50%; top: 50%; width: 190px; height: 190px;
+    margin: -95px 0 0 -95px; border-radius: 50%; opacity: 0; z-index: 29;
+    border-top: 3px solid rgba(255,55,40,0.95);
+    border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 3px solid transparent;
+    filter: drop-shadow(0 0 7px rgba(255,40,20,0.8));
+  }
+
+  .reload-wrap {
+    position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%);
+    width: 160px; text-align: center; opacity: 0; transition: opacity 0.2s;
+  }
+  .reload-wrap.on { opacity: 1; }
+  .reload-wrap .txt { font-size: 9px; letter-spacing: 0.36em; color: var(--amber); margin-bottom: 5px; }
+  .reload-wrap .bar { height: 3px; background: rgba(255,255,255,0.12); }
+  .reload-wrap .bar i { display: block; height: 100%; width: 0%; background: var(--amber); box-shadow: 0 0 10px rgba(255,180,70,0.6); }
+
+  .wave-banner {
+    position: absolute; left: 50%; top: 24%; transform: translate(-50%, -50%) scale(1.04);
+    text-align: center; opacity: 0; transition: opacity 0.4s ease, transform 0.4s ease;
+    pointer-events: none; z-index: 33; width: 90vw;
+  }
+  .wave-banner.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .wave-banner .k { font-size: 11px; letter-spacing: 0.6em; color: var(--red); font-weight: 700; text-transform: uppercase; }
+  .wave-banner .t { font-family: 'Teko'; font-size: clamp(54px, 8vw, 96px); line-height: 0.9; color: #f2efe5; letter-spacing: 0.03em; text-shadow: 0 6px 40px rgba(0,0,0,0.8); }
+  .wave-banner .s { font-size: 11px; letter-spacing: 0.34em; color: #9ba5a7; text-transform: uppercase; margin-top: 5px; }
+
+  .toast {
+    position: absolute; left: 50%; bottom: 20%; transform: translateX(-50%);
+    font-size: 10px; letter-spacing: 0.3em; color: #e8e5da; background: rgba(4,7,9,0.7);
+    border-left: 2px solid var(--teal); padding: 7px 14px; opacity: 0; transition: opacity 0.3s;
+    text-transform: uppercase; z-index: 33; white-space: nowrap;
+  }
+  .toast.on { opacity: 1; }
+
+  /* ------------------------------------------------------------ overlays */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(4,7,9,0.72) 0%, rgba(2,4,6,0.94) 75%);
+    opacity: 0; visibility: hidden; transition: opacity 0.35s, visibility 0.35s;
+    padding: var(--pad-t) var(--pad-r) var(--pad-b) var(--pad);
+  }
+  .overlay.on { opacity: 1; visibility: visible; }
+  .panel {
+    width: min(560px, 92vw); max-height: 88vh; overflow-y: auto;
+    background: rgba(6,10,13,0.9); border: 1px solid var(--line);
+    padding: clamp(20px, 3vw, 34px); position: relative;
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+  }
+  .panel h2 { font-family: 'Teko'; font-size: clamp(40px, 6vw, 62px); line-height: 0.9; margin: 0 0 4px; letter-spacing: 0.03em; }
+  .panel .sub { font-size: 10px; letter-spacing: 0.4em; color: #8d989b; text-transform: uppercase; margin-bottom: 22px; }
+  .panel h2.red { color: var(--red); text-shadow: 0 0 30px rgba(255,50,30,0.3); }
+  .btn-row { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+  .btn {
+    width: 100%; padding: 13px 16px; background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line); color: #dfe3df; font-family: 'Rajdhani'; font-weight: 600;
+    letter-spacing: 0.26em; font-size: 12px; text-transform: uppercase; cursor: pointer;
+    transition: all .18s; text-align: left; display: flex; justify-content: space-between; align-items: center;
+  }
+  .btn:hover { border-color: rgba(255,68,56,0.6); background: rgba(255,68,56,0.09); color: #fff; }
+  .btn.primary { background: rgba(255,68,56,0.15); border-color: rgba(255,68,56,0.6); color: #fff; }
+  .btn span { font-size: 9px; letter-spacing: 0.2em; color: #7f8b8e; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 18px 0 4px; }
+  .stat-box { border: 1px solid var(--line); padding: 10px 13px; background: rgba(255,255,255,0.02); }
+  .stat-box .l { font-size: 9px; letter-spacing: 0.28em; color: #879295; text-transform: uppercase; }
+  .stat-box .v { font-family: 'Teko'; font-size: 34px; line-height: 1; color: #f1eee4; }
+  .stat-box .v.amber { color: var(--amber); }
+  .stat-box .v.red { color: var(--red); }
+
+  .settings { display: flex; flex-direction: column; gap: 16px; margin: 10px 0 4px; }
+  .setting { display: flex; flex-direction: column; gap: 6px; }
+  .setting .row { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.26em; color: #97a1a3; text-transform: uppercase; }
+  .setting .row b { color: #d8ddda; font-weight: 600; letter-spacing: 0.1em; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 3px;
+    background: rgba(255,255,255,0.14); outline: none; border-radius: 0;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 13px; height: 13px;
+    background: var(--amber); border: 1px solid #000; cursor: pointer;
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+  .seg { display: flex; gap: 5px; }
+  .seg button {
+    flex: 1; background: rgba(255,255,255,0.03); border: 1px solid var(--line);
+    color: #9aa4a6; font-family: inherit; font-size: 10px; letter-spacing: 0.18em;
+    padding: 8px; cursor: pointer; text-transform: uppercase;
+  }
+  .seg button.on { background: rgba(255,181,74,0.16); border-color: rgba(255,181,74,0.5); color: var(--amber); }
+
+  .help-list { display: flex; flex-direction: column; gap: 8px; }
+  .help-list div { display: flex; justify-content: space-between; gap: 14px; font-size: 11px; letter-spacing: 0.1em; color: #a5aeaf; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 7px; }
+  .help-list div b { color: #e3e6e0; font-weight: 600; letter-spacing: 0.16em; white-space: nowrap; }
+  .help-list div i { font-style: normal; color: #7e8a8d; font-size: 10px; letter-spacing: 0.16em; }
+
+  /* --------------------------------------------------------- touch HUD */
+  #touch { position: fixed; inset: 0; z-index: 35; display: none; pointer-events: none; }
+  body.touch #touch { display: block; }
+  #touch .tbtn {
+    pointer-events: auto; position: absolute; border-radius: 50%;
+    background: rgba(10,15,18,0.4); border: 1px solid rgba(235,240,240,0.22);
+    color: rgba(240,240,235,0.86); font-family: 'Rajdhani'; font-weight: 700;
+    letter-spacing: 0.08em; display: grid; place-items: center; text-transform: uppercase;
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    touch-action: none; transition: transform .08s, background .08s;
+  }
+  #touch .tbtn:active, #touch .tbtn.on { background: rgba(255,68,56,0.3); border-color: rgba(255,80,60,0.7); transform: scale(0.95); }
+  #btn-fire {
+    width: clamp(66px, 11vw, 92px); height: clamp(66px, 11vw, 92px);
+    right: calc(var(--pad-r) + 6px); bottom: calc(var(--pad-b) + 76px);
+    font-size: 11px; color: #ffd8d0; border-color: rgba(255,70,50,0.55);
+    background: radial-gradient(circle, rgba(255,60,40,0.28), rgba(10,15,18,0.4));
+  }
+  #btn-ads {
+    width: 54px; height: 54px; right: calc(var(--pad-r) + 104px);
+    bottom: calc(var(--pad-b) + 150px); font-size: 9px;
+  }
+  #btn-reload {
+    width: 54px; height: 54px; right: calc(var(--pad-r) + 104px);
+    bottom: calc(var(--pad-b) + 76px); font-size: 9px;
+  }
+  #btn-jump {
+    width: 48px; height: 48px; right: calc(var(--pad-r) + 16px);
+    bottom: calc(var(--pad-b) + 186px); font-size: 15px;
+  }
+  #btn-switch {
+    width: 48px; height: 48px; right: calc(var(--pad-r) + 76px);
+    bottom: calc(var(--pad-b) + 196px); font-size: 9px;
+  }
+  #btn-grenade {
+    width: 46px; height: 46px; left: calc(var(--pad-r) + 126px);
+    bottom: calc(var(--pad-b) + 16px); font-size: 9px;
+  }
+  #joystick {
+    pointer-events: auto; position: absolute; left: calc(var(--pad-r) + 4px);
+    bottom: calc(var(--pad-b) + 14px); width: clamp(104px, 18vw, 136px); height: clamp(104px, 18vw, 136px);
+    border-radius: 50%; border: 1px solid rgba(235,240,240,0.16);
+    background: radial-gradient(circle, rgba(10,15,18,0.34) 0%, rgba(10,15,18,0.16) 70%, transparent 100%);
+    touch-action: none;
+  }
+  #joystick::after {
+    content: ''; position: absolute; inset: 50%; width: 1px; height: 1px; box-shadow: 0 0 0 22px rgba(255,255,255,0.04);
+    border-radius: 50%;
+  }
+  #stick {
+    position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px;
+    border-radius: 50%; background: rgba(235,240,240,0.16);
+    border: 1px solid rgba(235,240,240,0.4); box-shadow: 0 0 24px rgba(0,0,0,0.4);
+    transition: transform .05s linear;
+  }
+  #touch .look-hint {
+    position: absolute; right: 18%; top: 48%; font-size: 8px; letter-spacing: 0.3em;
+    color: rgba(235,240,240,0.28); text-transform: uppercase; pointer-events: none;
+  }
+
+  #rotate-hint {
+    position: fixed; inset: 0; z-index: 90; display: none; place-items: center;
+    background: rgba(2,4,6,0.96); text-align: center; padding: 30px;
+  }
+  #rotate-hint .r { font-family: 'Teko'; font-size: 40px; color: #f0ede3; letter-spacing: 0.06em; }
+  #rotate-hint .s { font-size: 10px; letter-spacing: 0.3em; color: #8d989b; margin-top: 6px; }
+  @media (orientation: portrait) and (max-width: 900px) {
+    body.touch #rotate-hint { display: grid; }
+  }
+
+  @media (max-width: 760px) {
+    .menu-bottom .hint { display: none; }
+    .menu-threats { gap: 14px; }
+    .hud-top-left .wave-card { min-width: 150px; padding: 8px 12px; }
+    .hud-top-right .score-card { min-width: 118px; padding: 7px 10px; }
+    .vitals { width: 190px; padding: 8px 11px; }
+    .vitals .hp { font-size: 34px; }
+    .ammo-card { min-width: 168px; padding: 7px 11px; }
+    .ammo-card .ammo .mag { font-size: 42px; }
+    .ammo-card .ammo .res { font-size: 20px; }
+    .compass-wrap { width: 46vw; top: calc(var(--pad-t) + 2px); }
+    .boss-wrap { top: calc(var(--pad-t) + 46px); width: 66vw; }
+    .killfeed { display: none; }
+    .menu-tag { display: none; }
+  }
+  @media (max-height: 520px) {
+    .title { font-size: clamp(56px, 15vh, 110px); }
+    .menu-threats { display: none; }
+    .menu-tag { display: none; }
+    .menu-links { margin-top: 8px; }
+    .deploy { padding: 12px 40px; }
+    .compass-wrap { height: 40px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <div class="vignette"></div>
+  <div class="grain" id="grain"></div>
+  <div class="scanlines"></div>
+  <div class="damage-overlay" id="damage-overlay"></div>
+  <div class="toxic-overlay" id="toxic-overlay"></div>
+  <div class="lowhp-overlay" id="lowhp-overlay"></div>
+
+  <div id="boot">
+    <div class="mark">DEAD <span>ASCENT</span></div>
+    <div class="bar"><i></i></div>
+    <div class="sub">BUILDING THE NIGHT</div>
+  </div>
+
+  <!-- ============================================================ MENU -->
+  <div id="menu">
+    <div class="menu-top">
+      <div class="brand"><i></i> SURVIVOR // SECTOR 09</div>
+      <div class="right">
+        <button class="icon-btn" id="btn-sound-menu" title="Sound">♪</button>
+        <button class="icon-btn" id="btn-fullscreen" title="Fullscreen">⛶</button>
+      </div>
+    </div>
+
+    <div class="menu-core">
+      <div class="kicker">The city is gone</div>
+      <h1 class="title">DEAD <span class="accent">ASCENT</span></h1>
+      <div class="subtitle">Survive the night</div>
+      <div class="menu-tag">No extraction. No backup. Just you, a rifle, and the things that used to be people. <b>They climb. They burst. They keep coming.</b></div>
+
+      <button class="deploy" id="btn-deploy">Deploy
+        <span class="key">CLICK TO ENGAGE</span>
+      </button>
+      <div class="menu-links">
+        <button class="ghost-btn" id="btn-howto">How to play</button>
+        <button class="ghost-btn" id="btn-settings-menu">Settings</button>
+      </div>
+
+      <div class="menu-threats">
+        <div><span class="dot red"></span> Walkers</div>
+        <div><span class="dot amber"></span> Runners</div>
+        <div><span class="dot green"></span> Boomers</div>
+        <div><span class="dot mag"></span> Climbers</div>
+      </div>
+    </div>
+
+    <div class="menu-bottom">
+      <div class="stat"><span>Best score</span><b id="menu-best">000000</b></div>
+      <div class="stat"><span>Best wave</span><b id="menu-best-wave">00</b></div>
+      <div class="hint">
+        <span><b>WASD</b> move</span>
+        <span><b>MOUSE</b> aim</span>
+        <span><b>LMB</b> fire</span>
+        <span><b>R</b> reload</span>
+        <span><b>1 / 2</b> weapons</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= HUD -->
+  <div id="hud">
+    <div class="compass-wrap"><canvas id="compass" width="440" height="50"></canvas></div>
+    <div class="boss-wrap" id="boss-wrap">
+      <div class="boss-name">THREAT CLASS <b>ABOMINATION</b></div>
+      <div class="boss-bar"><i id="boss-fill"></i></div>
+    </div>
+
+    <div class="hud-top-left">
+      <div class="hud-panel corner wave-card">
+        <div class="label"><span>WAVE</span><em id="wave-tag">INCOMING</em></div>
+        <div class="wave-num"><span id="wave-num">01</span><small>OF THE NIGHT</small></div>
+        <div class="enemies"><span class="count" id="enemy-count">0</span><span>HOSTILES</span><span class="bar"><i id="enemy-bar"></i></span></div>
+      </div>
+    </div>
+
+    <div class="hud-top-right">
+      <div class="hud-panel corner score-card">
+        <div class="label">SCORE</div>
+        <div class="score" id="score">0</div>
+        <div class="meta"><span>KILLS <b id="kills">0</b></span><span>BEST <b id="best">0</b></span></div>
+      </div>
+      <div class="killfeed" id="killfeed"></div>
+    </div>
+
+    <div class="hud-bottom-left">
+      <div class="hud-panel corner vitals">
+        <div class="row">
+          <div class="hp"><span id="hp">100</span><small>VITALS</small></div>
+          <div class="state" id="health-state">STABLE</div>
+        </div>
+        <div class="hp-bar"><i id="hp-fill"></i></div>
+        <div class="stam"><span>STAMINA</span><div class="bar"><i id="stam-fill"></i></div></div>
+      </div>
+    </div>
+
+    <div class="hud-bottom-right">
+      <div class="hud-panel corner ammo-card">
+        <div class="wname">PRIMARY // <b id="weapon-name">MK-7 CARBINE</b></div>
+        <div class="ammo"><span class="mag" id="ammo-mag">30</span><span class="slash">/</span><span class="res" id="ammo-res">240</span></div>
+        <div class="slots">
+          <span class="slot active" id="slot-1">1 · RIFLE</span>
+          <span class="slot" id="slot-2">2 · BREACHER</span>
+        </div>
+        <div class="grens"><span>FRAGS</span><span id="gren-pips"></span><b id="gren-count">3</b></div>
+      </div>
+    </div>
+
+    <div class="crosshair" id="crosshair">
+      <span class="ch t"></span><span class="ch b"></span><span class="ch l"></span><span class="ch r"></span><span class="dot"></span>
+    </div>
+    <div class="hitmarker" id="hitmarker">
+      <span class="hm a"></span><span class="hm b"></span><span class="hm c"></span><span class="hm d"></span>
+    </div>
+    <div class="damage-arc" id="damage-arc"></div>
+
+    <div class="reload-wrap" id="reload-wrap">
+      <div class="txt">RELOADING</div>
+      <div class="bar"><i id="reload-fill"></i></div>
+    </div>
+
+    <div class="wave-banner" id="wave-banner">
+      <div class="k" id="banner-kicker">WAVE INCOMING</div>
+      <div class="t" id="banner-title">WAVE 01</div>
+      <div class="s" id="banner-sub">Hold the line</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <!-- ======================================================== TOUCH UI -->
+  <div id="touch">
+    <div id="joystick"><div id="stick"></div></div>
+    <div class="look-hint">drag to look</div>
+    <button class="tbtn" id="btn-fire">Fire</button>
+    <button class="tbtn" id="btn-ads">ADS</button>
+    <button class="tbtn" id="btn-reload">R</button>
+    <button class="tbtn" id="btn-jump">↑</button>
+    <button class="tbtn" id="btn-switch">⇄</button>
+    <button class="tbtn" id="btn-grenade">G</button>
+  </div>
+
+  <!-- ========================================================= OVERLAYS -->
+  <div class="overlay" id="pause">
+    <div class="panel">
+      <h2>PAUSED</h2>
+      <div class="sub">The night is patient</div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-resume">Resume <span>ESC</span></button>
+        <button class="btn" id="btn-restart-pause">Restart run <span>R</span></button>
+        <button class="btn" id="btn-settings-pause">Settings <span>⚙</span></button>
+        <button class="btn" id="btn-quit">Abandon run <span>MENU</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="gameover">
+    <div class="panel">
+      <h2 class="red">YOU DIED</h2>
+      <div class="sub" id="go-sub">The city claims another</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="l">Wave reached</div><div class="v red" id="go-wave">01</div></div>
+        <div class="stat-box"><div class="l">Score</div><div class="v amber" id="go-score">0</div></div>
+        <div class="stat-box"><div class="l">Kills</div><div class="v" id="go-kills">0</div></div>
+        <div class="stat-box"><div class="l">Headshots</div><div class="v" id="go-heads">0</div></div>
+        <div class="stat-box"><div class="l">Accuracy</div><div class="v" id="go-acc">0%</div></div>
+        <div class="stat-box"><div class="l">Survived</div><div class="v" id="go-time">00:00</div></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-retry">Redeploy <span>ENTER</span></button>
+        <button class="btn" id="btn-menu">Main menu <span>ESC</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="settings">
+    <div class="panel">
+      <h2>SETTINGS</h2>
+      <div class="sub">Tune the fight</div>
+      <div class="settings">
+        <div class="setting">
+          <div class="row"><span>Mouse sensitivity</span><b id="sens-val">1.00</b></div>
+          <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1" />
+        </div>
+        <div class="setting">
+          <div class="row"><span>Master volume</span><b id="vol-val">70%</b></div>
+          <input type="range" id="vol" min="0" max="1" step="0.01" value="0.7" />
+        </div>
+        <div class="setting">
+          <div class="row"><span>Graphics quality</span><b id="quality-val">HIGH</b></div>
+          <div class="seg" id="quality-seg">
+            <button data-q="low">Performance</button>
+            <button data-q="high" class="on">Quality</button>
+          </div>
+        </div>
+        <div class="setting">
+          <div class="row"><span>Camera shake</span><b id="shake-val">100%</b></div>
+          <input type="range" id="shake" min="0" max="1" step="0.05" value="1" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-settings-close">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="howto">
+    <div class="panel">
+      <h2>FIELD MANUAL</h2>
+      <div class="sub">Read it. Then run.</div>
+      <div class="help-list">
+        <div><b>WASD</b><i>Move</i></div>
+        <div><b>MOUSE</b><i>Aim</i></div>
+        <div><b>LEFT CLICK</b><i>Fire</i></div>
+        <div><b>RIGHT CLICK</b><i>Aim down sights</i></div>
+        <div><b>SHIFT</b><i>Sprint</i></div>
+        <div><b>SPACE</b><i>Jump</i></div>
+        <div><b>R</b><i>Reload</i></div>
+        <div><b>1 / 2 / Q</b><i>Switch weapon</i></div>
+        <div><b>G</b><i>Throw frag</i></div>
+        <div><b>F</b><i>Knife</i></div>
+        <div><b>ESC</b><i>Pause</i></div>
+      </div>
+      <div class="menu-tag" style="margin:16px 0 0;max-width:none">
+        <b style="color:#ff6b58">BOOMERS</b> detonate when they get close. Kill them from range or they will take you with them.
+        <b style="color:#ff4bd8">CLIMBERS</b> scale the walls. Watch the parapets, and watch your compass.
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-howto-close">Understood</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rotate-hint">
+    <div>
+      <div class="r">ROTATE TO LANDSCAPE</div>
+      <div class="s">For the best view of the end of the world</div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
